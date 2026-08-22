@@ -19,7 +19,6 @@ GITHUB_TOKEN = os.environ.get('GH_PAT', '')
 # Repo සැකසුම්
 REPO_OWNER = 'SoloHackerEmpress'
 AD_VIEW_REPO = f'{REPO_OWNER}/ad_view'
-# Workflow එක run වෙන repo එක otomatis හඳුනා ගනී (e.g. SoloHackerEmpress/autopaka)
 CURRENT_REPO = os.environ.get('GITHUB_REPOSITORY', f'{REPO_OWNER}/autopaka')
 
 CHANNEL_ID = -1003768266911
@@ -234,8 +233,38 @@ async def main():
 
   url = pending_item['url']
   is_grid_only = (pending_idx + 1) % 4 == 0
-  task_success = False
 
+  # -------------------------------------------------------------
+  # Process කිරීමට ගන්නා අවස්ථාවේදීම is_done: True ලෙස update කිරීම
+  # -------------------------------------------------------------
+  links_data[pending_idx]['is_done'] = True
+
+  # 1. Local queue.json එක update කිරීම
+  with open(QUEUE_FILE, 'w') as f:
+    json.dump(links_data, f, indent=2)
+  print(f'🧹 queue.json updated locally for index {pending_idx}')
+
+  # 2. GitHub Repo එකේ queue.json එක update කිරීම
+  queue_data, queue_sha = get_github_file(CURRENT_REPO, QUEUE_FILE)
+  if queue_sha:
+    if update_github_file(
+        CURRENT_REPO,
+        QUEUE_FILE,
+        links_data,
+        queue_sha,
+        f'Mark item index {pending_idx} as done',
+    ):
+      print(
+          f'☁️ queue.json successfully updated in {CURRENT_REPO} on GitHub!'
+      )
+    else:
+      print(f'❌ Failed to update queue.json in {CURRENT_REPO}')
+  else:
+    print(f'❌ Could not fetch SHA for queue.json in {CURRENT_REPO}')
+
+  # -------------------------------------------------------------
+  # Download සහ Telegram වෙත යැවීමේ ක්‍රියාවලිය
+  # -------------------------------------------------------------
   ydl_opts = {
       'format': (
           'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
@@ -288,31 +317,6 @@ async def main():
     print(f'Error processing video: {e}')
 
   finally:
-    if pending_idx != -1 and task_success:
-      # 1. Local එකේ queue.json එක update කිරීම
-      links_data[pending_idx]['is_done'] = True
-      with open(QUEUE_FILE, 'w') as f:
-        json.dump(links_data, f, indent=2)
-      print(f'🧹 queue.json updated locally for index {pending_idx}')
-
-      # 2. මේ Script එක දුවන Repo එකේ (CURRENT_REPO) queue.json එක GitHub API හරහා Update කිරීම
-      queue_data, queue_sha = get_github_file(CURRENT_REPO, QUEUE_FILE)
-      if queue_sha:
-        if update_github_file(
-            CURRENT_REPO,
-            QUEUE_FILE,
-            links_data,
-            queue_sha,
-            f'Mark item index {pending_idx} as done',
-        ):
-          print(
-              f'☁️ queue.json successfully updated in {CURRENT_REPO} on GitHub!'
-          )
-        else:
-          print(f'❌ Failed to update queue.json in {CURRENT_REPO}')
-      else:
-        print(f'❌ Could not fetch SHA for queue.json in {CURRENT_REPO}')
-
     if os.path.exists('vid.mp4'):
       os.remove('vid.mp4')
 
