@@ -3,42 +3,35 @@ name: Run Video Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *' # කැමති වෙලාවකට (උදා: සෑම විනාඩි 30කට වරක්)
+    - cron: '0 */6 * * *' # පැය 6කට සැරයක් රන් වීමට
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install yt-dlp telethon requests nest-asyncio
-        sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
-    - name: Run Bot Script
-      env:
-        API_ID: ${{ secrets.API_ID }}
-        API_HASH: ${{ secrets.API_HASH }}
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        GH_PAT: ${{ secrets.GH_PAT }}
-      run: |
-        python runner.py
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "yt-dlp[default,curl-cffi]" curl-cffi telethon requests
 
-    - name: Commit and Push Updated queue.json
-      env:
-        GH_PAT: ${{ secrets.GH_PAT }}
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
-        git add queue.json
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Update queue.json progress" && git push)
+      - name: Run Bot Script
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: python runner.py
