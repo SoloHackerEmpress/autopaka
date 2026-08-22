@@ -10,7 +10,7 @@ import requests
 import yt_dlp
 from yt_dlp.networking.impersonate import ImpersonateTarget
 
-# GitHub Secrets හරහා දත්ත ලබා ගැනීම
+# GitHub Secrets
 API_ID = int(os.environ.get('API_ID', 0))
 API_HASH = os.environ.get('API_HASH', '')
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
@@ -18,17 +18,17 @@ GITHUB_TOKEN = os.environ.get('GH_PAT', '')
 
 CHANNEL_ID = -1003752062073
 REPO_OWNER = 'SoloHackerEmpress'
-REPO_NAME = 'ad_view'
+AD_VIEW_REPO = 'ad_view'
+
 COUNT_FILE_PATH = 'link/count/last_change_file_count.json'
 LINKS_DIR_PATH = 'link/links'
 QUEUE_FILE = 'queue.json'
 
 
-def get_github_file(path):
+# ad_view repo එක සදහා පමණක් වන GitHub API Functions
+def get_github_file(repo, path):
   try:
-    url = (
-        f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{path}'
-    )
+    url = f'https://api.github.com/repos/{REPO_OWNER}/{repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
@@ -36,15 +36,13 @@ def get_github_file(path):
       content = base64.b64decode(data['content']).decode('utf-8')
       return json.loads(content), data['sha']
   except Exception as e:
-    print(f'GitHub Fetch Error: {e}')
+    print(f'GitHub Fetch Error ({repo}/{path}): {e}')
   return None, None
 
 
-def update_github_file(path, content_dict, sha, message):
+def update_github_file(repo, path, content_dict, sha, message):
   try:
-    url = (
-        f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{path}'
-    )
+    url = f'https://api.github.com/repos/{REPO_OWNER}/{repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     content_str = json.dumps(content_dict, indent=4)
     payload = {
@@ -57,15 +55,13 @@ def update_github_file(path, content_dict, sha, message):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code in [200, 201]
   except Exception as e:
-    print(f'GitHub Update Error: {e}')
+    print(f'GitHub Update Error ({repo}/{path}): {e}')
     return False
 
 
-def create_github_file(path, content_dict, message):
+def create_github_file(repo, path, content_dict, message):
   try:
-    url = (
-        f'https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{path}'
-    )
+    url = f'https://api.github.com/repos/{REPO_OWNER}/{repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     content_str = json.dumps(content_dict, indent=4)
     payload = {
@@ -77,7 +73,7 @@ def create_github_file(path, content_dict, message):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code in [200, 201]
   except Exception as e:
-    print(f'GitHub Create Error: {e}')
+    print(f'GitHub Create Error ({repo}/{path}): {e}')
     return False
 
 
@@ -116,21 +112,31 @@ def create_grid_image(video_path, output_image, duration):
 async def send_via_telethon(
     client, file_path, title, web_thumb_url, video_url_original, is_grid_only
 ):
-  print('Fetching GitHub count data...')
-  count_data, count_sha = get_github_file(COUNT_FILE_PATH)
+  print('Fetching count data from ad_view repo...')
+  count_data, count_sha = get_github_file(AD_VIEW_REPO, COUNT_FILE_PATH)
   if not count_data:
     print('Error: Could not fetch count data from GitHub.')
     return False
+
   new_count = count_data['last_count'] + 1
   new_link_path = f'{LINKS_DIR_PATH}/{new_count}.json'
+
   if not create_github_file(
-      new_link_path, {'link': video_url_original}, f'Add link {new_count}'
+      AD_VIEW_REPO,
+      new_link_path,
+      {'link': video_url_original},
+      f'Add link {new_count}',
   ):
     print('Error: Could not create link file in GitHub.')
     return False
+
   count_data['last_count'] = new_count
   update_github_file(
-      COUNT_FILE_PATH, count_data, count_sha, f'Update count to {new_count}'
+      AD_VIEW_REPO,
+      COUNT_FILE_PATH,
+      count_data,
+      count_sha,
+      f'Update count to {new_count}',
   )
 
   print('Extracting video metadata...')
@@ -164,6 +170,7 @@ async def send_via_telethon(
           got_thumb = True
       except:
         pass
+
     if not got_thumb:
       subprocess.run(
           f'ffmpeg -y -i "{file_path}" -ss 00:00:05 -vframes 1 "{thumb_path}"',
@@ -223,6 +230,7 @@ async def main():
 
   url = pending_item['url']
   is_grid_only = (pending_idx + 1) % 4 == 0
+  task_success = False
 
   ydl_opts = {
       'format': (
@@ -261,10 +269,10 @@ async def main():
       title = info.get('title', 'Video')
       web_thumb_url = info.get('thumbnail')
 
-      success = await send_via_telethon(
+      task_success = await send_via_telethon(
           client, 'vid.mp4', title, web_thumb_url, url, is_grid_only
       )
-      if success:
+      if task_success:
         print(f'Successfully posted item {pending_idx + 1}')
       else:
         print(f'Failed to send item {pending_idx + 1}')
@@ -274,24 +282,14 @@ async def main():
 
     traceback.print_exc()
     print(f'Error processing video: {e}')
-    print('⚠️ Encountered an error. Skipping this link...')
 
   finally:
-    if pending_idx != -1:
+    # සාර්ථකව Telegram එකට Upload වුණොත් පමණක් is_done = True කර local queue.json එක Save කරයි
+    if pending_idx != -1 and task_success:
       links_data[pending_idx]['is_done'] = True
       with open(QUEUE_FILE, 'w') as f:
-        json.dump(links_data, f, indent=2)
-      print('🧹 queue.json updated locally.')
-
-      queue_data, queue_sha = get_github_file(QUEUE_FILE)
-      if queue_sha:
-        update_github_file(
-            QUEUE_FILE,
-            links_data,
-            queue_sha,
-            f'Mark index {pending_idx + 1} as done',
-        )
-        print('☁️ queue.json successfully updated on GitHub via API!')
+        json.dump(links_data, f, indent=4)
+      print(f'✅ queue.json updated locally: Item {pending_idx + 1} set to true.')
 
     if os.path.exists('vid.mp4'):
       os.remove('vid.mp4')
