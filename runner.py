@@ -22,7 +22,7 @@ AD_VIEW_REPO = f'{REPO_OWNER}/ad_view'
 # Workflow එක run වෙන repo එක otomatis හඳුනා ගනී (e.g. SoloHackerEmpress/autopaka)
 CURRENT_REPO = os.environ.get('GITHUB_REPOSITORY', f'{REPO_OWNER}/autopaka')
 
-CHANNEL_ID = -1003752062073
+CHANNEL_ID = -1003768266911
 COUNT_FILE_PATH = 'link/count/last_change_file_count.json'
 LINKS_DIR_PATH = 'link/links'
 QUEUE_FILE = 'queue.json'
