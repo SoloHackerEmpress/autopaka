@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import requests
@@ -24,9 +25,9 @@ CURRENT_REPO = os.environ.get('GITHUB_REPOSITORY', f'{REPO_OWNER}/autopaka')
 CHANNEL_ID = -1003768266911
 COUNT_FILE_PATH = 'link/count/last_change_file_count.json'
 LINKS_DIR_PATH = 'link/links'
-QUEUE_FILE = 'queue.json'
+JSON_DIR = 'json'
 
-
+ 
 # Dynamic API call functions
 def get_github_file(target_repo, path):
   try:
@@ -210,57 +211,98 @@ async def main():
   client = TelegramClient('bot_session', API_ID, API_HASH)
   await client.start(bot_token=BOT_TOKEN)
 
-  if not os.path.exists(QUEUE_FILE):
-    print('No queue.json file found!')
+  if not os.path.exists(JSON_DIR):
+    print(f'Directory "{JSON_DIR}" not found!')
     await client.disconnect()
     return
 
-  with open(QUEUE_FILE, 'r') as f:
-    links_data = json.load(f)
+  # Chunk files අංකනය අනුව පිළිවෙළට sort කිරීම (e.g. 1, 2, 3 ... 10, 11)
+  chunk_files = [
+      f
+      for f in os.listdir(JSON_DIR)
+      if f.startswith('videos_chunk_') and f.endswith('.json')
+  ]
+  chunk_files.sort(
+      key=lambda x: int(re.search(r'\d+', x).group())
+      if re.search(r'\d+', x)
+      else 0
+  )
 
-  pending_idx = -1
+  target_chunk_file = None
+  pending_local_idx = -1
   pending_item = None
-  for i, item in enumerate(links_data):
-    if not item.get('is_done'):
-      pending_idx = i
-      pending_item = item
+  links_data = []
+  global_idx = 0
+  global_counter = 0
+
+  # පළමු නොකළ (is_done: false) link එක සොයා ගැනීම
+  for chunk_file in chunk_files:
+    local_path = os.path.join(JSON_DIR, chunk_file)
+    try:
+      with open(local_path, 'r') as f:
+        data = json.load(f)
+    except Exception as e:
+      print(f'Error reading {chunk_file}: {e}')
+      continue
+
+    found = False
+    for local_idx, item in enumerate(data):
+      if not item.get('is_done'):
+        target_chunk_file = chunk_file
+        pending_local_idx = local_idx
+        pending_item = item
+        links_data = data
+        global_idx = global_counter + local_idx
+        found = True
+        break
+
+    if found:
       break
+    global_counter += len(data)
 
   if pending_item is None or not pending_item.get('url'):
-    print('No pending URLs to process.')
+    print('No pending URLs found across all chunk files.')
     await client.disconnect()
     return
 
   url = pending_item['url']
-  is_grid_only = (pending_idx + 1) % 4 == 0
+  is_grid_only = (global_idx + 1) % 4 == 0
+  github_chunk_path = f'{JSON_DIR}/{target_chunk_file}'
+
+  print(
+      f'Found pending link at {target_chunk_file} (Local Index:'
+      f' {pending_local_idx}, Global Index: {global_idx})'
+  )
 
   # -------------------------------------------------------------
   # Process කිරීමට ගන්නා අවස්ථාවේදීම is_done: True ලෙස update කිරීම
   # -------------------------------------------------------------
-  links_data[pending_idx]['is_done'] = True
+  links_data[pending_local_idx]['is_done'] = True
 
-  # 1. Local queue.json එක update කිරීම
-  with open(QUEUE_FILE, 'w') as f:
+  # 1. Local chunk file එක update කිරීම
+  local_chunk_filepath = os.path.join(JSON_DIR, target_chunk_file)
+  with open(local_chunk_filepath, 'w') as f:
     json.dump(links_data, f, indent=2)
-  print(f'🧹 queue.json updated locally for index {pending_idx}')
+  print(f'🧹 {target_chunk_file} updated locally for index {pending_local_idx}')
 
-  # 2. GitHub Repo එකේ queue.json එක update කිරීම
-  queue_data, queue_sha = get_github_file(CURRENT_REPO, QUEUE_FILE)
+  # 2. GitHub Repo එකේ අදාළ chunk file එක update කිරීම
+  queue_data, queue_sha = get_github_file(CURRENT_REPO, github_chunk_path)
   if queue_sha:
     if update_github_file(
         CURRENT_REPO,
-        QUEUE_FILE,
+        github_chunk_path,
         links_data,
         queue_sha,
-        f'Mark item index {pending_idx} as done',
+        f'Mark item index {pending_local_idx} in {target_chunk_file} as done',
     ):
       print(
-          f'☁️ queue.json successfully updated in {CURRENT_REPO} on GitHub!'
+          f'☁️ {github_chunk_path} successfully updated in {CURRENT_REPO} on'
+          ' GitHub!'
       )
     else:
-      print(f'❌ Failed to update queue.json in {CURRENT_REPO}')
+      print(f'❌ Failed to update {github_chunk_path} in {CURRENT_REPO}')
   else:
-    print(f'❌ Could not fetch SHA for queue.json in {CURRENT_REPO}')
+    print(f'❌ Could not fetch SHA for {github_chunk_path} in {CURRENT_REPO}')
 
   # -------------------------------------------------------------
   # Download සහ Telegram වෙත යැවීමේ ක්‍රියාවලිය
@@ -306,9 +348,9 @@ async def main():
           client, 'vid.mp4', title, web_thumb_url, url, is_grid_only
       )
       if task_success:
-        print(f'Successfully posted item {pending_idx + 1}')
+        print(f'Successfully posted item {global_idx + 1}')
       else:
-        print(f'Failed to send item {pending_idx + 1}')
+        print(f'Failed to send item {global_idx + 1}')
 
   except Exception as e:
     import traceback
