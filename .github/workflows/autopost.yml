@@ -3,11 +3,13 @@ name: Run Video Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # පැය 6කට සැරයක් රන් වීමට
+    - cron: '0 */6 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # repo එකට file write කිරීමට අවසර
 
     steps:
       - name: Checkout Repository
@@ -35,3 +37,12 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: python runner.py
+
+      - name: Commit & Push updated queue.json
+        if: always() # Script එක ඉවර වුණ ගමන් කෝමහරි push වෙනවා
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add queue.json
+          git commit -m "Update queue.json progress [skip ci]" || echo "No changes to commit"
+          git push
