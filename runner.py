@@ -16,14 +16,11 @@ API_HASH = os.environ.get('API_HASH', '')
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 GITHUB_TOKEN = os.environ.get('GH_PAT', '')
 
-# Script එක run වන current repo එක auto-detect කරගනී (e.g. SoloHackerEmpress/autopaka)
-CURRENT_REPO = os.environ.get(
-    'GITHUB_REPOSITORY', 'SoloHackerEmpress/autopaka'
-)
-
-# Ad View data සේව් වන Repo එක
+# Repo සැකසුම්
 REPO_OWNER = 'SoloHackerEmpress'
 AD_VIEW_REPO = f'{REPO_OWNER}/ad_view'
+# Workflow එක run වෙන repo එක otomatis හඳුනා ගනී (e.g. SoloHackerEmpress/autopaka)
+CURRENT_REPO = os.environ.get('GITHUB_REPOSITORY', f'{REPO_OWNER}/autopaka')
 
 CHANNEL_ID = -1003752062073
 COUNT_FILE_PATH = 'link/count/last_change_file_count.json'
@@ -31,10 +28,10 @@ LINKS_DIR_PATH = 'link/links'
 QUEUE_FILE = 'queue.json'
 
 
-# GitHub API Functions - Dynamic Repo Target
-def get_github_file(repo_full_name, path):
+# Dynamic API call functions
+def get_github_file(target_repo, path):
   try:
-    url = f'https://api.github.com/repos/{repo_full_name}/contents/{path}'
+    url = f'https://api.github.com/repos/{target_repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
@@ -42,13 +39,13 @@ def get_github_file(repo_full_name, path):
       content = base64.b64decode(data['content']).decode('utf-8')
       return json.loads(content), data['sha']
   except Exception as e:
-    print(f'GitHub Fetch Error ({repo_full_name}/{path}): {e}')
+    print(f'GitHub Fetch Error ({target_repo}/{path}): {e}')
   return None, None
 
 
-def update_github_file(repo_full_name, path, content_dict, sha, message):
+def update_github_file(target_repo, path, content_dict, sha, message):
   try:
-    url = f'https://api.github.com/repos/{repo_full_name}/contents/{path}'
+    url = f'https://api.github.com/repos/{target_repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     content_str = json.dumps(content_dict, indent=2)
     payload = {
@@ -61,13 +58,13 @@ def update_github_file(repo_full_name, path, content_dict, sha, message):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code in [200, 201]
   except Exception as e:
-    print(f'GitHub Update Error ({repo_full_name}/{path}): {e}')
+    print(f'GitHub Update Error ({target_repo}/{path}): {e}')
     return False
 
 
-def create_github_file(repo_full_name, path, content_dict, message):
+def create_github_file(target_repo, path, content_dict, message):
   try:
-    url = f'https://api.github.com/repos/{repo_full_name}/contents/{path}'
+    url = f'https://api.github.com/repos/{target_repo}/contents/{path}'
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     content_str = json.dumps(content_dict, indent=2)
     payload = {
@@ -79,7 +76,7 @@ def create_github_file(repo_full_name, path, content_dict, message):
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code in [200, 201]
   except Exception as e:
-    print(f'GitHub Create Error ({repo_full_name}/{path}): {e}')
+    print(f'GitHub Create Error ({target_repo}/{path}): {e}')
     return False
 
 
@@ -291,14 +288,14 @@ async def main():
     print(f'Error processing video: {e}')
 
   finally:
-    # 1. Telegram + ad_view සාර්ථක නම් පමණක් මේ repo එකේ queue.json එක local එකේ Update කරයි
     if pending_idx != -1 and task_success:
+      # 1. Local එකේ queue.json එක update කිරීම
       links_data[pending_idx]['is_done'] = True
       with open(QUEUE_FILE, 'w') as f:
         json.dump(links_data, f, indent=2)
-      print(f'🧹 queue.json updated locally for item {pending_idx + 1}')
+      print(f'🧹 queue.json updated locally for index {pending_idx}')
 
-      # 2. මේ Script එක run වෙන Repo එකේ (CURRENT_REPO) queue.json එක GitHub API හරහා Update කරයි
+      # 2. මේ Script එක දුවන Repo එකේ (CURRENT_REPO) queue.json එක GitHub API හරහා Update කිරීම
       queue_data, queue_sha = get_github_file(CURRENT_REPO, QUEUE_FILE)
       if queue_sha:
         if update_github_file(
@@ -306,16 +303,15 @@ async def main():
             QUEUE_FILE,
             links_data,
             queue_sha,
-            f'Mark item {pending_idx + 1} as done',
+            f'Mark item index {pending_idx} as done',
         ):
           print(
-              '☁️ queue.json successfully updated in current repo'
-              f' ({CURRENT_REPO}) on GitHub!'
+              f'☁️ queue.json successfully updated in {CURRENT_REPO} on GitHub!'
           )
         else:
-          print(f'❌ Failed to update queue.json on GitHub ({CURRENT_REPO})')
+          print(f'❌ Failed to update queue.json in {CURRENT_REPO}')
       else:
-        print(f'❌ Could not retrieve SHA for queue.json in {CURRENT_REPO}')
+        print(f'❌ Could not fetch SHA for queue.json in {CURRENT_REPO}')
 
     if os.path.exists('vid.mp4'):
       os.remove('vid.mp4')
