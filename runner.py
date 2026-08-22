@@ -215,23 +215,26 @@ async def main():
   url = pending_item['url']
   is_grid_only = (pending_idx + 1) % 4 == 0
 
-  ydl_opts = {
-      'format': (
-          'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
-      ),
-      'outtmpl': 'vid.mp4',
-      'quiet': True,
-      'nocheckcertificate': True,
-      'user_agent': (
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)'
-          ' AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6'
-          ' Mobile/15E148 Safari/604.1'
-      ),
-      'headers': {
-          'Referer': 'https://www.pornhub.com/',
-          'Accept-Language': 'en-US,en;q=0.9',
-      },
-  }
+ ydl_opts = {
+        'format': (
+            'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+        ),
+        'outtmpl': 'vid.mp4',
+        'quiet': True,
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'http_headers': {
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ' (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            ),
+            'Accept': (
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+            ),
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.pornhub.com/',
+        },
+    }
 
   try:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
