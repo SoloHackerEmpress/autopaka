@@ -1,0 +1,4 @@
+telethon
+yt-dlp
+requests
+curl_cffi
