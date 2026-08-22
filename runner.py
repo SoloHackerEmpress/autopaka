@@ -113,12 +113,7 @@ def create_grid_image(video_path, output_image, duration):
 
 
 async def send_via_telethon(
-    client,
-    file_path,
-    title,
-    web_thumb_url,
-    video_url_original,
-    is_grid_only,
+    client, file_path, title, web_thumb_url, video_url_original, is_grid_only
 ):
   print('Fetching GitHub count data...')
   count_data, count_sha = get_github_file(COUNT_FILE_PATH)
@@ -237,7 +232,6 @@ async def main():
       'nocheckcertificate': True,
       'geo_bypass': True,
       'socket_timeout': 60,
-      'impersonate': 'chrome',
       'http_headers': {
           'User-Agent': (
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -250,6 +244,15 @@ async def main():
           'Referer': 'https://www.pornhub.com/',
       },
   }
+
+  # curl-cffi සක්‍රීය නම් පමණක් impersonate එකතු කිරීම
+  try:
+    import curl_cffi
+
+    ydl_opts['impersonate'] = 'chrome'
+    print('✅ Impersonate target "chrome" activated via curl-cffi.')
+  except ImportError:
+    print('⚠️ curl-cffi package not found. Continuing without impersonation...')
 
   try:
     print(f'Starting Original Quality download for: {url}')
