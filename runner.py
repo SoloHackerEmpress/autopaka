@@ -8,6 +8,7 @@ from telethon import Button, TelegramClient
 from telethon.tl.types import DocumentAttributeVideo
 import requests
 import yt_dlp
+from yt_dlp.networking.impersonate import ImpersonateTarget
 
 # GitHub Secrets හරහා දත්ත ලබා ගැනීම
 API_ID = int(os.environ.get('API_ID', 0))
@@ -245,14 +246,13 @@ async def main():
       },
   }
 
-  # curl-cffi සක්‍රීය නම් පමණක් impersonate එකතු කිරීම
   try:
     import curl_cffi
 
-    ydl_opts['impersonate'] = 'chrome'
+    ydl_opts['impersonate'] = ImpersonateTarget.from_str('chrome')
     print('✅ Impersonate target "chrome" activated via curl-cffi.')
-  except ImportError:
-    print('⚠️ curl-cffi package not found. Continuing without impersonation...')
+  except Exception as e:
+    print(f'⚠️ Impersonate setup error: {e}')
 
   try:
     print(f'Starting Original Quality download for: {url}')
