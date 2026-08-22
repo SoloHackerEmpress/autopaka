@@ -9,13 +9,14 @@ from telethon.tl.types import DocumentAttributeVideo
 import requests
 import yt_dlp
 
-# GitHub Secrets හරහා දත්ත ලබා ගැනීම (Secure)
-API_ID = int(os.getenv('API_ID', '21895887'))
-API_HASH = os.getenv('API_HASH', '')
-BOT_TOKEN = os.getenv('BOT_TOKEN', '')
+API_ID = 21895887
+API_HASH = '54f05f3363abfafc4574e1ce0800b407'
+BOT_TOKEN = '8946231074:AAF2waV6NNiQN95mHnMRGxI5yVK0aPC9d8M'
 CHANNEL_ID = -1003752062073
 
-GITHUB_TOKEN = os.getenv('GH_PAT', '')
+GITHUB_TOKEN = (
+    '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'
+)
 REPO_OWNER = 'SoloHackerEmpress'
 REPO_NAME = 'ad_view'
 COUNT_FILE_PATH = 'link/count/last_change_file_count.json'
@@ -113,28 +114,30 @@ def create_grid_image(video_path, output_image, duration):
 async def send_via_telethon(
     client, file_path, title, web_thumb_url, video_url_original, is_grid_only
 ):
-  print('\n🔗 GitHub සමඟ සම්බන්ධ වෙමින්...')
+  print('Fetching GitHub count data...')
   count_data, count_sha = get_github_file(COUNT_FILE_PATH)
   if not count_data:
+    print('Error: Could not fetch count data from GitHub.')
     return False
   new_count = count_data['last_count'] + 1
   new_link_path = f'{LINKS_DIR_PATH}/{new_count}.json'
-
   if not create_github_file(
       new_link_path, {'link': video_url_original}, f'Add link {new_count}'
   ):
+    print('Error: Could not create link file in GitHub.')
     return False
-
   count_data['last_count'] = new_count
   update_github_file(
       COUNT_FILE_PATH, count_data, count_sha, f'Update count to {new_count}'
   )
 
+  print('Extracting video metadata...')
   meta = get_video_metadata(file_path)
   duration = meta['duration']
   button_url = f'https://solohackerempress.github.io/ad_view/?{new_count}'
 
   if is_grid_only:
+    print('Sending grid image to Telegram...')
     grid_file = 'grid.jpg'
     if create_grid_image(file_path, grid_file, duration):
       grid_cap = f'**{title}**\n\n> **THIS VIDEO CAN ONLY WATCH ONLINE**'
@@ -147,6 +150,10 @@ async def send_via_telethon(
       if os.path.exists(grid_file):
         os.remove(grid_file)
   else:
+    print(
+        'Uploading Original Quality video to Telegram (this may take a few'
+        ' minutes)...'
+    )
     thumb_path = 'thumb.jpg'
     got_thumb = False
     if web_thumb_url:
@@ -173,6 +180,7 @@ async def send_via_telethon(
         h=meta['height'],
         supports_streaming=True,
     )
+
     await client.send_file(
         CHANNEL_ID,
         file_path,
@@ -185,6 +193,7 @@ async def send_via_telethon(
     )
     if got_thumb and os.path.exists(thumb_path):
       os.remove(thumb_path)
+    print('Original Quality Video uploaded successfully!')
   return True
 
 
@@ -218,33 +227,58 @@ async def main():
 
   ydl_opts = {
       'format': (
-          'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+          'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
       ),
       'outtmpl': 'vid.mp4',
       'quiet': True,
+      'nocheckcertificate': True,
+      'geo_bypass': True,
+      'socket_timeout': 60,
+      'http_headers': {
+          'User-Agent': (
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              ' (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+          ),
+          'Accept': (
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+          ),
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.pornhub.com/',
+      },
   }
 
   try:
-    print(f'🚀 Processing ({pending_idx + 1}): {url} [Grid Only: {is_grid_only}]')
+    print(f'Starting Original Quality download for: {url}')
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
       info = ydl.extract_info(url, download=True)
+      title = info.get('title', 'Video')
+      web_thumb_url = info.get('thumbnail')
+
       success = await send_via_telethon(
-          client,
-          'vid.mp4',
-          info.get('title', 'Video'),
-          info.get('thumbnail'),
-          url,
-          is_grid_only,
+          client, 'vid.mp4', title, web_thumb_url, url, is_grid_only
       )
       if success:
-        links_data[pending_idx]['is_done'] = True
-        with open(QUEUE_FILE, 'w') as f:
-          json.dump(links_data, f, indent=2)
-        print('🧹 Cleaned up and queue.json updated.')
-        if os.path.exists('vid.mp4'):
-          os.remove('vid.mp4')
+        print(f'Successfully posted item {pending_idx + 1}')
+      else:
+        print(f'Failed to send item {pending_idx + 1}')
+
   except Exception as e:
-    print(f'❌ Error: {e}')
+    import traceback
+
+    traceback.print_exc()
+    print(f'Error processing video: {e}')
+    print('⚠️ Encountered an error. Skipping this link...')
+
+  finally:
+    # වැරදුනත්, සාර්ථක වුණත්, මේ ලින්ක් එක done කරලා ඊළඟ එකට මාරු වෙන්න සැලැස්වීම
+    if pending_idx != -1:
+      links_data[pending_idx]['is_done'] = True
+      with open(QUEUE_FILE, 'w') as f:
+        json.dump(links_data, f, indent=2)
+      print('🧹 queue.json updated successfully.')
+
+    if os.path.exists('vid.mp4'):
+      os.remove('vid.mp4')
 
   await client.disconnect()
 
