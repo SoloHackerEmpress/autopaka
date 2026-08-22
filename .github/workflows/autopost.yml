@@ -3,7 +3,7 @@ name: Run Video Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # පැය 6කට සැරයක් රන් වීමට
+    - cron: '0 * * * *' # පැයෙන් පැයට (සෑම පැයකදීම) රන් වීමට
 
 jobs:
   build:
