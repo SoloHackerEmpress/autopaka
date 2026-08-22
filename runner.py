@@ -241,9 +241,10 @@ async def main():
       title = info.get('title', 'Video')
       web_thumb_url = info.get('thumbnail')
 
-      if await send_vide_telethon_check := await send_via_telethon(
+      success = await send_via_telethon(
           client, 'vid.mp4', title, web_thumb_url, url, is_grid_only
-      ):
+      )
+      if success:
         links_data[pending_idx]['is_done'] = True
         with open(QUEUE_FILE, 'w') as f:
           json.dump(links_data, f, indent=2)
