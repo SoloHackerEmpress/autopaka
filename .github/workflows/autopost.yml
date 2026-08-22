@@ -2,8 +2,8 @@ name: Hourly Auto Post Bot
 
 on:
   schedule:
-    - cron: '0 * * * *'  # පැයකට සැරයක් Auto Run වේ
-  workflow_dispatch:      # GitHub Dashboard එකෙන් Manual Run කිරීමට
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install FFmpeg
         run: |
