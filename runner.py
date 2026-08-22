@@ -213,28 +213,27 @@ async def main():
   url = pending_item['url']
   is_grid_only = (pending_idx + 1) % 4 == 0
 
-ydl_opts = {
-        'format': (
-            'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
-        ),
-        'outtmpl': 'vid.mp4',
-        'quiet': True,
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        # මෙතැනට ක්‍රියාත්මක වන Free Proxy එකක් ලබා දිය හැක (උදාහරණයක් ලෙස):
-        'proxy': 'http://190.61.88.147:8080', 
-        'http_headers': {
-            'User-Agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                ' (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ),
-            'Accept': (
-                'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
-            ),
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.pornhub.com/',
-        },
-    }
+  ydl_opts = {
+      'format': (
+          'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+      ),
+      'outtmpl': 'vid.mp4',
+      'quiet': True,
+      'nocheckcertificate': True,
+      'geo_bypass': True,
+      'proxy': 'http://190.61.88.147:8080',
+      'http_headers': {
+          'User-Agent': (
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              ' (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          ),
+          'Accept': (
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+          ),
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.pornhub.com/',
+      },
+  }
 
   try:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -242,7 +241,7 @@ ydl_opts = {
       title = info.get('title', 'Video')
       web_thumb_url = info.get('thumbnail')
 
-      if await send_via_telethon(
+      if await send_vide_telethon_check := await send_via_telethon(
           client, 'vid.mp4', title, web_thumb_url, url, is_grid_only
       ):
         links_data[pending_idx]['is_done'] = True
