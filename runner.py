@@ -114,25 +114,30 @@ def create_grid_image(video_path, output_image, duration):
 async def send_via_telethon(
     client, file_path, title, web_thumb_url, video_url_original, is_grid_only
 ):
+  print('Fetching GitHub count data...')
   count_data, count_sha = get_github_file(COUNT_FILE_PATH)
   if not count_data:
+    print('Error: Could not fetch count data from GitHub.')
     return False
   new_count = count_data['last_count'] + 1
   new_link_path = f'{LINKS_DIR_PATH}/{new_count}.json'
   if not create_github_file(
       new_link_path, {'link': video_url_original}, f'Add link {new_count}'
   ):
+    print('Error: Could not create link file in GitHub.')
     return False
   count_data['last_count'] = new_count
   update_github_file(
       COUNT_FILE_PATH, count_data, count_sha, f'Update count to {new_count}'
   )
 
+  print('Extracting video metadata...')
   meta = get_video_metadata(file_path)
   duration = meta['duration']
   button_url = f'https://solohackerempress.github.io/ad_view/?{new_count}'
 
   if is_grid_only:
+    print('Sending grid image to Telegram...')
     grid_file = 'grid.jpg'
     if create_grid_image(file_path, grid_file, duration):
       grid_cap = f'**{title}**\n\n> **THIS VIDEO CAN ONLY WATCH ONLINE**'
@@ -145,6 +150,10 @@ async def send_via_telethon(
       if os.path.exists(grid_file):
         os.remove(grid_file)
   else:
+    print(
+        'Uploading Original Quality video to Telegram (this may take a few'
+        ' minutes)...'
+    )
     thumb_path = 'thumb.jpg'
     got_thumb = False
     if web_thumb_url:
@@ -171,6 +180,8 @@ async def send_via_telethon(
         h=meta['height'],
         supports_streaming=True,
     )
+
+    # Telethon upload එක සාර්ථක වීමට ලොකු Timeout එකක් සහ Chunk size එක වැඩි කිරීම
     await client.send_file(
         CHANNEL_ID,
         file_path,
@@ -179,9 +190,11 @@ async def send_via_telethon(
         supports_streaming=True,
         attributes=[video_attributes],
         buttons=[Button.url('🌐 Watch Online', button_url)],
+        part_size_kb=512,  # ලොකු වීඩියෝ ඉක්මනින් හා ස්ථාවරව යැවීමට
     )
     if got_thumb and os.path.exists(thumb_path):
       os.remove(thumb_path)
+    print('Original Quality Video uploaded successfully!')
   return True
 
 
@@ -213,15 +226,16 @@ async def main():
   url = pending_item['url']
   is_grid_only = (pending_idx + 1) % 4 == 0
 
+  # මෙතැනදී height<=1080 දමා Original High Quality එක ඉල්ලා ඇත
   ydl_opts = {
       'format': (
-          'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
+          'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
       ),
       'outtmpl': 'vid.mp4',
       'quiet': True,
       'nocheckcertificate': True,
       'geo_bypass': True,
-      'socket_timeout': 30,
+      'socket_timeout': 60,
       'http_headers': {
           'User-Agent': (
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -236,6 +250,7 @@ async def main():
   }
 
   try:
+    print(f'Starting Original Quality download for: {url}')
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
       info = ydl.extract_info(url, download=True)
       title = info.get('title', 'Video')
@@ -252,6 +267,9 @@ async def main():
         if os.path.exists('vid.mp4'):
           os.remove('vid.mp4')
   except Exception as e:
+    import traceback
+
+    traceback.print_exc()
     print(f'Error processing video: {e}')
 
   await client.disconnect()
